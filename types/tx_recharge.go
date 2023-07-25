@@ -37,6 +37,10 @@ func (tx *TxRecharge) Cost() *big.Int {
 	return gasCost.Add(gasCost, tx.Preface.Value())
 }
 
+func (tx *TxRecharge) Size() uint64 {
+	return uint64(len(tx.Serialize()))
+}
+
 type TxPrefaceRecharge struct {
 	txHash     common.Hash
 	inputCoins []gadget.InputCoin

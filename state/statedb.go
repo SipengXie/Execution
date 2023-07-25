@@ -11,4 +11,5 @@ type StateDB interface {
 	GetBalance(common.Address) *big.Int
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
+	Copy() StateDB
 }

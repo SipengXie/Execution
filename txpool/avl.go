@@ -1,7 +1,12 @@
 package txpool
 
 import (
+	"errors"
 	"math/big"
+)
+
+var (
+	ErrEmptyTree = errors.New("empty tree")
 )
 
 // AVLTree structure. Public methods are Add, Remove, Update, Search, Flatten.
@@ -26,6 +31,20 @@ func (t *AVLTree) Search(key uint64) (node *AVLNode, sum *big.Int) {
 	return t.root.search(key)
 }
 
+func (t *AVLTree) Smallest() (uint64, error) {
+	if t.root == nil {
+		return 0, ErrEmptyTree
+	}
+	return t.root.findSmallest().key, nil // might get error if root is nil
+}
+
+func (t *AVLTree) Largest() (uint64, error) {
+	if t.root == nil {
+		return 0, ErrEmptyTree
+	}
+	return t.root.findLargest().key, nil // might get error if root is nil
+}
+
 func (t *AVLTree) Flatten() []*AVLNode {
 	nodes := make([]*AVLNode, 0)
 	if t.root == nil {
@@ -39,9 +58,7 @@ func (t *AVLTree) Flatten() []*AVLNode {
 type AVLNode struct {
 	key   uint64   // nonce
 	value *big.Int // cost
-
-	// tx  types.Transaction // transaction
-	sum *big.Int // Sum of costs of the subtree
+	sum   *big.Int // Sum of costs of the subtree
 
 	// height counts nodes (not edges)
 	height int
@@ -244,6 +261,15 @@ func (n *AVLNode) rotateRight() *AVLNode {
 func (n *AVLNode) findSmallest() *AVLNode {
 	if n.left != nil {
 		return n.left.findSmallest()
+	} else {
+		return n
+	}
+}
+
+// Finds the largest child (based on the key) for the current node
+func (n *AVLNode) findLargest() *AVLNode {
+	if n.right != nil {
+		return n.right.findLargest()
 	} else {
 		return n
 	}

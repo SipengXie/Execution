@@ -34,8 +34,8 @@ func (as *accountSet) contains(addr common.Address) bool {
 
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
-func (as *accountSet) containsTx(tx *types.Transaction) bool {
-	return as.contains((*tx).TxPreface().From())
+func (as *accountSet) containsTx(tx types.Transaction) bool {
+	return as.contains(tx.TxPreface().From())
 }
 
 // add inserts a new address into the set to track.
@@ -45,8 +45,8 @@ func (as *accountSet) add(addr common.Address) {
 }
 
 // addTx adds the sender of tx into the set.
-func (as *accountSet) addTx(tx *types.Transaction) {
-	as.add((*tx).TxPreface().From())
+func (as *accountSet) addTx(tx types.Transaction) {
+	as.add(tx.TxPreface().From())
 }
 
 // flatten returns the list of addresses within this set, also caching it for later
@@ -70,8 +70,8 @@ func (as *accountSet) merge(other *accountSet) {
 	as.cache = nil
 }
 
-// lookup is used internally by LegacyPool to track transactions while allowing
-// lookup without mutex contention.
+// Lookup is used internally by LegacyPool to track transactions while allowing
+// Lookup without mutex contention.
 //
 // Note, although this type is properly protected against concurrent access, it
 // is **not** a type that should ever be mutated or even exposed outside of the
@@ -80,27 +80,27 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in LegacyPool.Get without having to acquire the widely scoped
 // LegacyPool.mu mutex.
 //
-// This lookup set combines the notion of "local transactions", which is useful
+// This Lookup set combines the notion of "local transactions", which is useful
 // to build upper-level structure.
-type lookup struct {
+type Lookup struct {
 	slots   int
 	lock    sync.RWMutex
-	locals  map[common.Hash]*types.Transaction
-	remotes map[common.Hash]*types.Transaction
+	locals  map[common.Hash]types.Transaction
+	remotes map[common.Hash]types.Transaction
 }
 
-// newLookup returns a new lookup structure.
-func newLookup() *lookup {
-	return &lookup{
-		locals:  make(map[common.Hash]*types.Transaction),
-		remotes: make(map[common.Hash]*types.Transaction),
+// newLookup returns a new Lookup structure.
+func NewLookup() *Lookup {
+	return &Lookup{
+		locals:  make(map[common.Hash]types.Transaction),
+		remotes: make(map[common.Hash]types.Transaction),
 	}
 }
 
 // Range calls f on each key and value present in the map. The callback passed
 // should return the indicator whether the iteration needs to be continued.
 // Callers need to specify which set (or both) to be iterated.
-func (t *lookup) Range(f func(hash common.Hash, tx *types.Transaction, local bool) bool, local bool, remote bool) {
+func (t *Lookup) Range(f func(hash common.Hash, tx types.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -120,8 +120,8 @@ func (t *lookup) Range(f func(hash common.Hash, tx *types.Transaction, local boo
 	}
 }
 
-// Get returns a transaction if it exists in the lookup, or nil if not found.
-func (t *lookup) Get(hash common.Hash) *types.Transaction {
+// Get returns a transaction if it exists in the Lookup, or nil if not found.
+func (t *Lookup) Get(hash common.Hash) types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -131,56 +131,56 @@ func (t *lookup) Get(hash common.Hash) *types.Transaction {
 	return t.remotes[hash]
 }
 
-// GetLocal returns a transaction if it exists in the lookup, or nil if not found.
-func (t *lookup) GetLocal(hash common.Hash) *types.Transaction {
+// GetLocal returns a transaction if it exists in the Lookup, or nil if not found.
+func (t *Lookup) GetLocal(hash common.Hash) types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return t.locals[hash]
 }
 
-// GetRemote returns a transaction if it exists in the lookup, or nil if not found.
-func (t *lookup) GetRemote(hash common.Hash) *types.Transaction {
+// GetRemote returns a transaction if it exists in the Lookup, or nil if not found.
+func (t *Lookup) GetRemote(hash common.Hash) types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return t.remotes[hash]
 }
 
-// Count returns the current number of transactions in the lookup.
-func (t *lookup) Count() int {
+// Count returns the current number of transactions in the Lookup.
+func (t *Lookup) Count() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return len(t.locals) + len(t.remotes)
 }
 
-// LocalCount returns the current number of local transactions in the lookup.
-func (t *lookup) LocalCount() int {
+// LocalCount returns the current number of local transactions in the Lookup.
+func (t *Lookup) LocalCount() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return len(t.locals)
 }
 
-// RemoteCount returns the current number of remote transactions in the lookup.
-func (t *lookup) RemoteCount() int {
+// RemoteCount returns the current number of remote transactions in the Lookup.
+func (t *Lookup) RemoteCount() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return len(t.remotes)
 }
 
-// Slots returns the current number of slots used in the lookup.
-func (t *lookup) Slots() int {
+// Slots returns the current number of slots used in the Lookup.
+func (t *Lookup) Slots() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	return t.slots
 }
 
-// Add adds a transaction to the lookup.
-func (t *lookup) Add(tx *types.Transaction, local bool) {
+// Add adds a transaction to the Lookup.
+func (t *Lookup) Add(tx types.Transaction, local bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -188,14 +188,14 @@ func (t *lookup) Add(tx *types.Transaction, local bool) {
 	slotsGauge.Update(int64(t.slots))
 
 	if local {
-		t.locals[(*tx).TxPreface().TxHash()] = tx
+		t.locals[tx.TxPreface().TxHash()] = tx
 	} else {
-		t.remotes[(*tx).TxPreface().TxHash()] = tx
+		t.remotes[tx.TxPreface().TxHash()] = tx
 	}
 }
 
-// Remove removes a transaction from the lookup.
-func (t *lookup) Remove(hash common.Hash) {
+// Remove removes a transaction from the Lookup.
+func (t *Lookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -216,7 +216,7 @@ func (t *lookup) Remove(hash common.Hash) {
 
 // RemoteToLocals migrates the transactions belongs to the given locals to locals
 // set. The assumption is held the locals set is thread-safe to be used.
-func (t *lookup) RemoteToLocals(locals *accountSet) int {
+func (t *Lookup) RemoteToLocals(locals *accountSet) int {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -232,10 +232,10 @@ func (t *lookup) RemoteToLocals(locals *accountSet) int {
 }
 
 // RemotesBelowTip finds all remote transactions below the given tip threshold.
-func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
+func (t *Lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
-	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
-		if (*tx).TxPreface().GasPrice().Cmp(threshold) < 0 {
+	t.Range(func(hash common.Hash, tx types.Transaction, local bool) bool {
+		if tx.TxPreface().GasPrice().Cmp(threshold) < 0 {
 			found = append(found, tx)
 		}
 		return true
@@ -244,6 +244,6 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
-func numSlots(tx *types.Transaction) int {
-	return int(((*tx).Size() + txSlotSize - 1) / txSlotSize)
+func numSlots(tx types.Transaction) int {
+	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }

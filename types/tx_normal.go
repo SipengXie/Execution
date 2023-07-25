@@ -40,6 +40,10 @@ func (tx *TxNormal) Cost() *big.Int {
 	return gasCost.Add(gasCost, tx.Preface.Value())
 }
 
+func (tx *TxNormal) Size() uint64 {
+	return uint64(len(tx.Serialize()))
+}
+
 type TxNormalPreface struct {
 	txHash     common.Hash
 	from       common.Address

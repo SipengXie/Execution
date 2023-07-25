@@ -46,12 +46,14 @@ type TxExtends interface {
 	StrictAccessList() gadget.AccessList
 }
 
-type Transactions []*Transaction
+type Transactions []Transaction
+
+func (txs Transactions) Len() int { return len(txs) }
 
 type TxByNonce Transactions
 
 func (s TxByNonce) Len() int { return len(s) }
 func (s TxByNonce) Less(i, j int) bool {
-	return (*s[i]).TxPreface().Nonce() < (*s[j]).TxPreface().Nonce()
+	return (s[i]).TxPreface().Nonce() < (s[j]).TxPreface().Nonce()
 }
 func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }

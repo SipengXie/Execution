@@ -36,6 +36,10 @@ func (tx *TxWithdraw) Cost() *big.Int {
 	return gasCost.Add(gasCost, tx.Preface.Value())
 }
 
+func (tx *TxWithdraw) Size() uint64 {
+	return uint64(len(tx.Serialize()))
+}
+
 type TxWithdrawPreface struct {
 	txHash      common.Hash
 	from        common.Address
