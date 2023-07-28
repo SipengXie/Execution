@@ -18,6 +18,8 @@ type Transaction interface {
 	Cost() *big.Int
 
 	Size() uint64
+
+	IntrinsicGas() (uint64, error)
 }
 
 type TxPreface interface {
@@ -57,3 +59,21 @@ func (s TxByNonce) Less(i, j int) bool {
 	return (s[i]).TxPreface().Nonce() < (s[j]).TxPreface().Nonce()
 }
 func (s TxByNonce) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+// TxDifference returns a new set which is the difference between a and b.
+func TxDifference(a, b Transactions) Transactions {
+	keep := make(Transactions, 0, len(a))
+
+	remove := make(map[common.Hash]struct{})
+	for _, tx := range b {
+		remove[tx.TxPreface().TxHash()] = struct{}{}
+	}
+
+	for _, tx := range a {
+		if _, ok := remove[tx.TxPreface().TxHash()]; !ok {
+			keep = append(keep, tx)
+		}
+	}
+
+	return keep
+}

@@ -41,6 +41,10 @@ func (tx *TxRecharge) Size() uint64 {
 	return uint64(len(tx.Serialize()))
 }
 
+func (tx *TxRecharge) IntrinsicGas() (uint64, error) {
+	return 0, nil
+}
+
 type TxPrefaceRecharge struct {
 	txHash     common.Hash
 	inputCoins []gadget.InputCoin

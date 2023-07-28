@@ -51,6 +51,10 @@ func (l *List) Contains(nonce uint64) bool {
 	return l.txs.Get(nonce) != nil
 }
 
+func (l *List) GetCost(nonce uint64) *big.Int {
+	return l.txs.GetCost(nonce)
+}
+
 // Add tries to insert a new transaction into the List, returning whether the
 // transaction was accepted, and if yes, any previous transaction it replaced.
 //
@@ -167,12 +171,12 @@ func (l *List) Remove(tx types.Transaction) (bool, types.Transactions) {
 // Ready retrieves a sequentially increasing List of transactions starting at the
 // provided nonce that is ready for processing. The returned transactions will be
 // removed from the List.
-//
+// The start is the virtual nonce of the account, not the first nonce of it.
 // Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
-func (l *List) Ready(start uint64) types.Transactions {
-	txs := l.txs.Ready(start)
+func (l *List) Ready(start uint64, threshold *big.Int) types.Transactions {
+	txs := l.txs.Ready(start, threshold)
 	return txs
 }
 

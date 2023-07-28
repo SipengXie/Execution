@@ -3,7 +3,9 @@ package types
 import (
 	"encoding/json"
 	"execution/common"
+	"execution/params"
 	"execution/types/gadget"
+	"math"
 	"math/big"
 )
 
@@ -42,6 +44,62 @@ func (tx *TxNormal) Cost() *big.Int {
 
 func (tx *TxNormal) Size() uint64 {
 	return uint64(len(tx.Serialize()))
+}
+
+func (tx *TxNormal) IntrinsicGas() (uint64, error) {
+	// Set the starting gas for the raw transaction
+	var gas uint64
+	if (tx.Inner.To() == common.Address{}) {
+		gas = params.TxGasContractCreation
+	} else {
+		gas = params.TxGas
+	}
+	dataLen := uint64(len(tx.Inner.data))
+	// Bump the required gas by the amount of transactional data
+	if dataLen > 0 {
+		// Zero and non-zero bytes are priced differently
+		var nz uint64
+		for _, byt := range tx.Inner.data {
+			if byt != 0 {
+				nz++
+			}
+		}
+		// Make sure we don't exceed uint64 for all data combinations
+		nonZeroGas := params.TxDataNonZeroGas
+
+		if (math.MaxUint64-gas)/nonZeroGas < nz {
+			return 0, ErrGasUintOverflow
+		}
+		gas += nz * nonZeroGas
+
+		z := dataLen - nz
+		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
+			return 0, ErrGasUintOverflow
+		}
+		gas += z * params.TxDataZeroGas
+
+		if (tx.Inner.To() == common.Address{}) {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
+	}
+	if tx.Inner.accessList != nil {
+		gas += uint64(tx.Inner.accessList.Len()) * params.TxAccessListAddressGas
+		gas += uint64(tx.Inner.accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
+	}
+	return gas, nil
+}
+
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
 }
 
 type TxNormalPreface struct {

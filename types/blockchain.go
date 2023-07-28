@@ -13,11 +13,11 @@ type BlockChain interface {
 	Config() *params.ChainConfig
 
 	// CurrentBlock returns the current head of the chain.
-	CurrentBlock() *Header
+	CurrentBlock() Header
 
 	// GetBlock retrieves a specific block, used during pool resets.
-	GetBlock(hash common.Hash, number uint64) *Block
+	GetBlock(hash common.Hash, number uint64) Block
 
 	// StateAt returns a state database for a given root hash (generally the head).
-	StateAt(root common.Hash) (state.StateDB, error)
+	StateAt(blockHash common.Hash) (state.StateDB, error)
 }

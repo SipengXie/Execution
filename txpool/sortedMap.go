@@ -1,6 +1,9 @@
 package txpool
 
-import "execution/types"
+import (
+	"execution/types"
+	"math/big"
+)
 
 type SortedMap struct {
 	items map[uint64]types.Transaction // Hash map storing the transaction data
@@ -16,6 +19,11 @@ func NewSortedMap() *SortedMap {
 
 func (m *SortedMap) Get(nonce uint64) types.Transaction {
 	return m.items[nonce]
+}
+
+func (m *SortedMap) GetCost(nonce uint64) *big.Int {
+	_, cost := m.tree.Search(nonce)
+	return cost
 }
 
 func (m *SortedMap) Put(tx types.Transaction) {
@@ -83,8 +91,8 @@ func (m *SortedMap) Remove(nonce uint64) bool {
 }
 
 // Given the provided start nonce, Ready returns
-// transactions that are continous, starting from the start nonce.
-func (m *SortedMap) Ready(start uint64) types.Transactions {
+// transactions that are continous, the varible start is the virtual nonce.
+func (m *SortedMap) Ready(start uint64, threshold *big.Int) types.Transactions {
 	size := len(m.items)
 	if size == 0 {
 		return nil
@@ -95,22 +103,21 @@ func (m *SortedMap) Ready(start uint64) types.Transactions {
 	}
 
 	var ready types.Transactions
-	next := start
+	tx := m.items[smallest]
+	total := new(big.Int).Set(tx.Cost())
 
-	for size > 0 {
-		if smallest == next {
-			ready = append(ready, m.items[smallest])
-			next++
-		} else if smallest > next {
-			break
-		}
-		size--
+	for next := smallest; size > 0 && smallest == next && total.Cmp(threshold) <= 0; next++ {
+		ready = append(ready, m.items[next])
 		m.tree.Remove(smallest)
 		delete(m.items, smallest)
+		size--
+
 		smallest, err = m.tree.Smallest()
 		if err != nil {
 			break
 		}
+		tx = m.items[smallest]
+		total = total.Add(total, tx.Cost())
 	}
 
 	return ready

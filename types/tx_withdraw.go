@@ -40,6 +40,10 @@ func (tx *TxWithdraw) Size() uint64 {
 	return uint64(len(tx.Serialize()))
 }
 
+func (tx *TxWithdraw) IntrinsicGas() (uint64, error) {
+	return 0, nil
+}
+
 type TxWithdrawPreface struct {
 	txHash      common.Hash
 	from        common.Address
