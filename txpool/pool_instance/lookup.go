@@ -1,4 +1,4 @@
-package txpool
+package txpool_instance
 
 import (
 	"execution/common"
@@ -34,8 +34,8 @@ func (as *accountSet) contains(addr common.Address) bool {
 
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
-func (as *accountSet) containsTx(tx types.Transaction) bool {
-	return as.contains(tx.TxPreface().From())
+func (as *accountSet) containsTx(tx *types.Transaction) bool {
+	return as.contains(tx.From)
 }
 
 // add inserts a new address into the set to track.
@@ -45,8 +45,8 @@ func (as *accountSet) add(addr common.Address) {
 }
 
 // addTx adds the sender of tx into the set.
-func (as *accountSet) addTx(tx types.Transaction) {
-	as.add(tx.TxPreface().From())
+func (as *accountSet) addTx(tx *types.Transaction) {
+	as.add(tx.From)
 }
 
 // flatten returns the list of addresses within this set, also caching it for later
@@ -85,22 +85,22 @@ func (as *accountSet) merge(other *accountSet) {
 type Lookup struct {
 	slots   int
 	lock    sync.RWMutex
-	locals  map[common.Hash]types.Transaction
-	remotes map[common.Hash]types.Transaction
+	locals  map[common.Hash]*types.Transaction
+	remotes map[common.Hash]*types.Transaction
 }
 
 // newLookup returns a new Lookup structure.
 func NewLookup() *Lookup {
 	return &Lookup{
-		locals:  make(map[common.Hash]types.Transaction),
-		remotes: make(map[common.Hash]types.Transaction),
+		locals:  make(map[common.Hash]*types.Transaction),
+		remotes: make(map[common.Hash]*types.Transaction),
 	}
 }
 
 // Range calls f on each key and value present in the map. The callback passed
 // should return the indicator whether the iteration needs to be continued.
 // Callers need to specify which set (or both) to be iterated.
-func (t *Lookup) Range(f func(hash common.Hash, tx types.Transaction, local bool) bool, local bool, remote bool) {
+func (t *Lookup) Range(f func(hash common.Hash, tx *types.Transaction, local bool) bool, local bool, remote bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -121,7 +121,7 @@ func (t *Lookup) Range(f func(hash common.Hash, tx types.Transaction, local bool
 }
 
 // Get returns a transaction if it exists in the Lookup, or nil if not found.
-func (t *Lookup) Get(hash common.Hash) types.Transaction {
+func (t *Lookup) Get(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -132,7 +132,7 @@ func (t *Lookup) Get(hash common.Hash) types.Transaction {
 }
 
 // GetLocal returns a transaction if it exists in the Lookup, or nil if not found.
-func (t *Lookup) GetLocal(hash common.Hash) types.Transaction {
+func (t *Lookup) GetLocal(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -140,7 +140,7 @@ func (t *Lookup) GetLocal(hash common.Hash) types.Transaction {
 }
 
 // GetRemote returns a transaction if it exists in the Lookup, or nil if not found.
-func (t *Lookup) GetRemote(hash common.Hash) types.Transaction {
+func (t *Lookup) GetRemote(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -180,7 +180,7 @@ func (t *Lookup) Slots() int {
 }
 
 // Add adds a transaction to the Lookup.
-func (t *Lookup) Add(tx types.Transaction, local bool) {
+func (t *Lookup) Add(tx *types.Transaction, local bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -188,9 +188,9 @@ func (t *Lookup) Add(tx types.Transaction, local bool) {
 	slotsGauge.Update(int64(t.slots))
 
 	if local {
-		t.locals[tx.TxPreface().TxHash()] = tx
+		t.locals[tx.TxHash] = tx
 	} else {
-		t.remotes[tx.TxPreface().TxHash()] = tx
+		t.remotes[tx.TxHash] = tx
 	}
 }
 
@@ -234,8 +234,8 @@ func (t *Lookup) RemoteToLocals(locals *accountSet) int {
 // RemotesBelowTip finds all remote transactions below the given tip threshold.
 func (t *Lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
-	t.Range(func(hash common.Hash, tx types.Transaction, local bool) bool {
-		if tx.TxPreface().GasPrice().Cmp(threshold) < 0 {
+	t.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+		if tx.GasPrice.Price.Cmp(threshold) < 0 {
 			found = append(found, tx)
 		}
 		return true
@@ -244,6 +244,6 @@ func (t *Lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
-func numSlots(tx types.Transaction) int {
+func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }

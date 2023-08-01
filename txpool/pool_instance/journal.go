@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package txpool
+package txpool_instance
 
 import (
 	"errors"
@@ -27,7 +27,6 @@ import (
 	"execution/utils"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted
@@ -76,7 +75,7 @@ func (journal *journal) load(add func(types.Transactions) []error) error {
 	defer func() { journal.writer = nil }()
 
 	// Inject all transactions from the journal into the pool
-	var serializer utils.Serializer
+	var serializer utils.JsonSerializer
 	stream := serializer.GetDecoder(input, 0)
 	total, dropped := 0, 0
 
@@ -110,7 +109,7 @@ func (journal *journal) load(add func(types.Transactions) []error) error {
 		// New transaction parsed, queue up for later, import if threshold is reached
 		total++
 
-		if batch = append(batch, *tx); batch.Len() > 1024 {
+		if batch = append(batch, tx); batch.Len() > 1024 {
 			loadBatch(batch)
 			batch = batch[:0]
 		}
@@ -121,11 +120,11 @@ func (journal *journal) load(add func(types.Transactions) []error) error {
 }
 
 // insert adds the specified transaction to the local disk journal.
-func (journal *journal) insert(tx types.Transaction) error {
+func (journal *journal) insert(tx *types.Transaction) error {
 	if journal.writer == nil {
 		return errNoActiveJournal
 	}
-	var serializer utils.Serializer
+	var serializer utils.JsonSerializer
 	Encoder := serializer.GetEncoder(journal.writer)
 	if err := Encoder.Encode(tx); err != nil {
 		return err
@@ -148,10 +147,12 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 	if err != nil {
 		return err
 	}
+	var serializer utils.JsonSerializer
+	Encoder := serializer.GetEncoder(replacement)
 	journaled := 0
 	for _, txs := range all {
 		for _, tx := range txs {
-			if err = rlp.Encode(replacement, tx); err != nil {
+			if err = Encoder.Encode(tx); err != nil {
 				replacement.Close()
 				return err
 			}

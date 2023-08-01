@@ -1,4 +1,4 @@
-package txpool
+package txpool_instance
 
 import (
 	"container/heap"
@@ -16,7 +16,7 @@ import (
 // If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
 	baseFee *big.Int // heap should always be re-sorted after baseFee is changed
-	list    []types.Transaction
+	list    []*types.Transaction
 }
 
 func (h *priceHeap) Len() int      { return len(h.list) }
@@ -29,16 +29,16 @@ func (h *priceHeap) Less(i, j int) bool {
 	case 1:
 		return false
 	default:
-		return (h.list[i]).TxPreface().Nonce() > (h.list[j]).TxPreface().Nonce()
+		return (h.list[i]).Nonce > (h.list[j]).Nonce
 	}
 }
 
-func (h *priceHeap) cmp(a, b types.Transaction) int {
-	return a.TxPreface().GasPrice().Cmp(b.TxPreface().GasPrice())
+func (h *priceHeap) cmp(a, b *types.Transaction) int {
+	return a.GasPrice.Price.Cmp(b.GasPrice.Price)
 }
 
 func (h *priceHeap) Push(x interface{}) {
-	tx := x.(types.Transaction)
+	tx := x.(*types.Transaction)
 	h.list = append(h.list, tx)
 }
 
@@ -85,7 +85,7 @@ func NewPricedList(all *Lookup) *PricedList {
 }
 
 // Put inserts a new transaction into the heap.
-func (l *PricedList) Put(tx types.Transaction, local bool) {
+func (l *PricedList) Put(tx *types.Transaction, local bool) {
 	if local {
 		return
 	}
@@ -108,7 +108,7 @@ func (l *PricedList) Removed(count int) {
 
 // Underpriced checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction currently being tracked.
-func (l *PricedList) Underpriced(tx types.Transaction) bool {
+func (l *PricedList) Underpriced(tx *types.Transaction) bool {
 	// Note: with two queues, being underpriced is defined as being worse than the worst item
 	// in all non-empty queues if there is any. If both queues are empty then nothing is underpriced.
 	return (l.underpricedFor(&l.urgent, tx) || len(l.urgent.list) == 0) &&
@@ -118,11 +118,11 @@ func (l *PricedList) Underpriced(tx types.Transaction) bool {
 
 // underpricedFor checks whether a transaction is cheaper than (or as cheap as) the
 // lowest priced (remote) transaction in the given heap.
-func (l *PricedList) underpricedFor(h *priceHeap, tx types.Transaction) bool {
+func (l *PricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
-		if l.all.GetRemote((head).TxPreface().TxHash()) == nil { // Removed or migrated
+		if l.all.GetRemote((head).TxHash) == nil { // Removed or migrated
 			l.stales.Add(-1)
 			heap.Pop(h)
 			continue
@@ -148,8 +148,8 @@ func (l *PricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 	for slots > 0 {
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio {
 			// Discard stale transactions if found during cleanup
-			tx := heap.Pop(&l.urgent).(types.Transaction)
-			if l.all.GetRemote(tx.TxPreface().TxHash()) == nil { // Removed or migrated
+			tx := heap.Pop(&l.urgent).(*types.Transaction)
+			if l.all.GetRemote(tx.TxHash) == nil { // Removed or migrated
 				l.stales.Add(-1)
 				continue
 			}
@@ -161,8 +161,8 @@ func (l *PricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 				break
 			}
 			// Discard stale transactions if found during cleanup
-			tx := heap.Pop(&l.floating).(types.Transaction)
-			if l.all.GetRemote(tx.TxPreface().TxHash()) == nil { // Removed or migrated
+			tx := heap.Pop(&l.floating).(*types.Transaction)
+			if l.all.GetRemote(tx.TxHash) == nil { // Removed or migrated
 				l.stales.Add(-1)
 				continue
 			}
@@ -187,8 +187,8 @@ func (l *PricedList) Reheap() {
 	defer l.reheapMu.Unlock()
 	start := time.Now()
 	l.stales.Store(0)
-	l.urgent.list = make([]types.Transaction, 0, l.all.RemoteCount())
-	l.all.Range(func(hash common.Hash, tx types.Transaction, local bool) bool {
+	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
+	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
 		l.urgent.list = append(l.urgent.list, tx)
 		return true
 	}, false, true) // Only iterate remotes
@@ -200,9 +200,9 @@ func (l *PricedList) Reheap() {
 	// it more efficiently. Also, Underpriced would work suboptimally the first time
 	// if the floating queue was empty.
 	floatingCount := len(l.urgent.list) * floatingRatio / (urgentRatio + floatingRatio)
-	l.floating.list = make([]types.Transaction, floatingCount)
+	l.floating.list = make([]*types.Transaction, floatingCount)
 	for i := 0; i < floatingCount; i++ {
-		l.floating.list[i] = heap.Pop(&l.urgent).(types.Transaction)
+		l.floating.list[i] = heap.Pop(&l.urgent).(*types.Transaction)
 	}
 	heap.Init(&l.floating)
 	reheapTimer.Update(time.Since(start))

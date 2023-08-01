@@ -1,34 +1,28 @@
 package main
 
-import (
-	"fmt"
-)
+import "encoding/json"
 
-type Animal interface {
-	bark()
+type struct1 struct {
+	ES2 *struct2 `json:"s2,omitempty"`
 }
 
-type Dog struct {
-	name string
+type struct2 struct {
+	GData string `json:"data,omitempty"`
 }
-
-func (d Dog) bark() {
-	fmt.Println("wang wang wang")
-}
-
-type Cat struct {
-	age int
-}
-
-func (c Cat) bark() {
-	fmt.Println("miao miao miao")
-}
-
-type Animals []Animal
 
 func main() {
-	animals := Animals{Dog{"dog"}, Cat{3}}
-	for _, animal := range animals {
-		fmt.Println(animal)
+	s2 := &struct2{GData: "data"}
+	s1 := &struct1{ES2: s2}
+
+	ret, err := json.Marshal(s1)
+	if err != nil {
+		panic(err)
+	}
+	println(string(ret))
+
+	s1_ := new(struct1)
+	err = json.Unmarshal(ret, s1_)
+	if err != nil {
+		panic(err)
 	}
 }

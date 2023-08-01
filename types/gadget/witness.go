@@ -1,3 +1,3 @@
 package gadget
 
-type Witness interface{}
+type Witness struct{}

@@ -1,4 +1,4 @@
-package txpool
+package txpool_instance
 
 import (
 	"execution/common"
@@ -7,7 +7,7 @@ import (
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
-type NewTxsEvent struct{ Txs []types.Transaction }
+type NewTxsEvent struct{ Txs types.Transactions }
 
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block types.Block }

@@ -1,4 +1,4 @@
-package txpool
+package txpool_instance
 
 import (
 	"execution/types"
@@ -6,18 +6,18 @@ import (
 )
 
 type SortedMap struct {
-	items map[uint64]types.Transaction // Hash map storing the transaction data
-	tree  *AVLTree                     // AVL tree of nonces of all the stored transactions (non-strict mode)
+	items map[uint64]*types.Transaction // Hash map storing the transaction data
+	tree  *AVLTree                      // AVL tree of nonces of all the stored transactions (non-strict mode)
 }
 
 func NewSortedMap() *SortedMap {
 	return &SortedMap{
-		items: make(map[uint64]types.Transaction),
+		items: make(map[uint64]*types.Transaction),
 		tree:  new(AVLTree),
 	}
 }
 
-func (m *SortedMap) Get(nonce uint64) types.Transaction {
+func (m *SortedMap) Get(nonce uint64) *types.Transaction {
 	return m.items[nonce]
 }
 
@@ -26,8 +26,8 @@ func (m *SortedMap) GetCost(nonce uint64) *big.Int {
 	return cost
 }
 
-func (m *SortedMap) Put(tx types.Transaction) {
-	nonce := tx.TxPreface().Nonce()
+func (m *SortedMap) Put(tx *types.Transaction) {
+	nonce := tx.Nonce
 	m.items[nonce] = tx
 	m.tree.Add(nonce, tx.Cost())
 }
@@ -36,7 +36,7 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 	var remove types.Transactions
 	for {
 		nonce, err := m.tree.Smallest()
-		if nonce > threshold || err != nil {
+		if nonce >= threshold || err != nil {
 			break
 		}
 		tx := m.items[nonce]
@@ -47,7 +47,7 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 	return remove
 }
 
-func (m *SortedMap) Filter(filter func(types.Transaction) bool) types.Transactions {
+func (m *SortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
 	var remove types.Transactions
 	for nonce, tx := range m.items {
 		if filter(tx) {
@@ -136,7 +136,7 @@ func (m *SortedMap) Flatten() types.Transactions {
 	return cache
 }
 
-func (m *SortedMap) LastElement() types.Transaction {
+func (m *SortedMap) LastElement() *types.Transaction {
 	last, err := m.tree.Largest()
 	if err != nil {
 		return nil

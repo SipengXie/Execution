@@ -1,4 +1,4 @@
 package gadget
 
-type Refund interface {
+type Refund struct {
 }

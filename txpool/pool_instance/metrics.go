@@ -1,4 +1,4 @@
-package txpool
+package txpool_instance
 
 import "github.com/ethereum/go-ethereum/metrics"
 

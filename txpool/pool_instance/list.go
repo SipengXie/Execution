@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package txpool
+package txpool_instance
 
 import (
 	"math"
@@ -60,12 +60,12 @@ func (l *List) GetCost(nonce uint64) *big.Int {
 //
 // If the new transaction is accepted into the List, the Lists' cost and gas
 // thresholds are also potentially updated.
-func (l *List) Add(tx types.Transaction, priceBump uint64) (bool, types.Transaction) {
+func (l *List) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
-	old := l.txs.Get(tx.TxPreface().Nonce())
+	old := l.txs.Get(tx.Nonce)
 	if old != nil {
-		oldPrice := old.TxPreface().GasPrice()
-		newPrice := tx.TxPreface().GasPrice()
+		oldPrice := old.GasPrice.Price
+		newPrice := tx.GasPrice.Price
 		if oldPrice.Cmp(newPrice) >= 0 {
 			return false, nil
 		}
@@ -88,7 +88,7 @@ func (l *List) Add(tx types.Transaction, priceBump uint64) (bool, types.Transact
 	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
-	if gas := tx.TxPreface().GasLimit(); l.gascap < gas {
+	if gas := tx.GasLimit; l.gascap < gas {
 		l.gascap = gas
 	}
 	return true, old
@@ -120,8 +120,8 @@ func (l *List) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 	l.gascap = gasLimit
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx types.Transaction) bool {
-		return tx.TxPreface().GasLimit() > gasLimit || tx.Cost().Cmp(costLimit) > 0
+	removed := l.txs.Filter(func(tx *types.Transaction) bool {
+		return tx.GasLimit > gasLimit || tx.Cost().Cmp(costLimit) > 0
 	})
 
 	if len(removed) == 0 {
@@ -132,12 +132,12 @@ func (l *List) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 	if l.strict {
 		lowest := uint64(math.MaxUint64)
 		for _, tx := range removed {
-			if nonce := tx.TxPreface().Nonce(); lowest > nonce {
+			if nonce := tx.Nonce; lowest > nonce {
 				lowest = nonce
 			}
 		}
 		// TODO: we can use LastElement() here, may be more efficient
-		invalids = l.txs.Filter(func(tx types.Transaction) bool { return tx.TxPreface().Nonce() > lowest })
+		invalids = l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce > lowest })
 	}
 	// Reset total cost
 	return removed, invalids
@@ -153,16 +153,16 @@ func (l *List) Cap(threshold int) types.Transactions {
 // Remove deletes a transaction from the maintained List, returning whether the
 // transaction was found, and also returning any transaction invalidated due to
 // the deletion (strict mode only).
-func (l *List) Remove(tx types.Transaction) (bool, types.Transactions) {
+func (l *List) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	// Remove the transaction from the set
-	nonce := tx.TxPreface().Nonce()
+	nonce := tx.Nonce
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		// TODO: we can use LastElement() here, may be more efficient
-		txs := l.txs.Filter(func(tx types.Transaction) bool { return tx.TxPreface().Nonce() > nonce })
+		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce > nonce })
 		return true, txs
 	}
 	return true, nil
@@ -199,6 +199,6 @@ func (l *List) Flatten() types.Transactions {
 
 // LastElement returns the last element of a flattened List, thus, the
 // transaction with the highest nonce
-func (l *List) LastElement() types.Transaction {
+func (l *List) LastElement() *types.Transaction {
 	return l.txs.LastElement()
 }

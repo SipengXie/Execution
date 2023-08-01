@@ -2,38 +2,49 @@ package gadget
 
 import (
 	"crypto/ecdsa"
-	"crypto/sha256"
+	"crypto/elliptic"
 	"errors"
 	"execution/common"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto" // substitude to our crypto
+	"execution/crypto" // substitude to our crypto
 )
-
-type Validation interface {
-	GetFrom(input common.Hash) (common.Address, error)
-	Sign(input common.Hash, prv []byte)
-}
 
 var (
 	ErrInvalidSignature = errors.New("invalid signature")
 	ErrInvalidPubKey    = errors.New("invalid public key")
 )
 
-type SignatureEcdsa struct {
-	r, s *big.Int
-	v    byte
+type Validation struct {
+	R *big.Int `json:"r,omitempty"`
+	S *big.Int `json:"s,omitempty"`
+	V *big.Int `json:"v,omitempty"`
 }
 
-func (sign *SignatureEcdsa) GetFrom(input common.Hash) (common.Address, error) {
-	if len(sign.r.Bytes()) != 32 || len(sign.s.Bytes()) != 32 || sign.v != 0 && sign.v != 1 {
+func validateSignatureValues(r, s *big.Int, v byte) bool {
+	Big1 := big.NewInt(1)
+	if r.Cmp(Big1) < 0 || s.Cmp(Big1) < 0 || s.Cmp(crypto.Secp256k1halfN) > 0 {
+		return false
+	}
+	return r.Cmp(crypto.Secp256k1N) < 0 && s.Cmp(crypto.Secp256k1N) < 0 && (v == 0 || v == 1)
+}
+
+func (sign *Validation) GetFrom(input common.Hash) (common.Address, error) {
+	if sign.V.BitLen() > 8 {
+		return common.Address{}, ErrInvalidSignature
+	}
+	v := byte(sign.V.Uint64() - 27)
+
+	if !validateSignatureValues(sign.R, sign.S, v) {
 		return common.Address{}, ErrInvalidSignature
 	}
 
 	sig := make([]byte, 65)
-	copy(sig[:32], sign.r.Bytes())
-	copy(sig[32:64], sign.s.Bytes())
-	sig[64] = sign.v
+	r := sign.R.Bytes()
+	s := sign.S.Bytes()
+	copy(sig[32-len(r):32], r)
+	copy(sig[64-len(s):64], s)
+	sig[64] = v
 
 	pub, err := crypto.Ecrecover(input[:], sig)
 	if err != nil {
@@ -43,21 +54,32 @@ func (sign *SignatureEcdsa) GetFrom(input common.Hash) (common.Address, error) {
 		return common.Address{}, ErrInvalidPubKey
 	}
 
-	pubHash := sha256.Sum256(pub[1:])
 	var addr common.Address
-	copy(addr[:], pubHash[12:])
+	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
 
 	return addr, nil
 }
 
-func (sign *SignatureEcdsa) Sign(input common.Hash, prv []byte) {
-	var key ecdsa.PrivateKey
-	key.D = new(big.Int).SetBytes(prv)
-	sig, err := crypto.Sign(input[:], &key)
+func (sign *Validation) Sign(input common.Hash, prv *ecdsa.PrivateKey) {
+	sig, err := crypto.Sign(input[:], prv)
 	if err != nil {
 		panic(err)
 	}
-	sign.r = new(big.Int).SetBytes(sig[:32])
-	sign.s = new(big.Int).SetBytes(sig[32:64])
-	sign.v = sig[64]
+	sign.R = new(big.Int).SetBytes(sig[:32])
+	sign.S = new(big.Int).SetBytes(sig[32:64])
+	sign.V = new(big.Int).SetBytes([]byte{sig[64] + 27})
+}
+
+func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
+	if pub == nil || pub.X == nil || pub.Y == nil {
+		return nil
+	}
+	return elliptic.Marshal(crypto.S256(), pub.X, pub.Y)
+}
+
+func PubkeyToAddress(p ecdsa.PublicKey) common.Address {
+	pubBytes := FromECDSAPub(&p)
+	from := common.Address{}
+	from.SetBytes(crypto.Keccak256(pubBytes[1:])[12:])
+	return from
 }
